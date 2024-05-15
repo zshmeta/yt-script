@@ -1,6 +1,7 @@
 import ytScript from './src/cli.js';
 
-console.log('ytScript', ytScript);
-ytScript();
-
-console.log('done');
+ytScript().then(() => {
+    console.log('done');
+}).catch(err => {
+    console.error('An error occurred:', err);
+});

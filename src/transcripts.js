@@ -1,7 +1,21 @@
 import { DOMParser } from 'xmldom';
-import settings from './settings.js';
-import errors from './error.js';
-import unescape from './htmlParser.js';
+import { watchURL} from './settings.js';
+import {
+    couldNotRetrieveTranscript,
+    youTubeRequestFailed,
+    videoUnavailable,
+    invalidVideoId,
+    tooManyRequests,
+    transcriptsDisabled,
+    noTranscriptAvailable,
+    notTranslatable,
+    translationLanguageNotAvailable,
+    cookiePathInvalid,
+    cookiesInvalid,
+    failedToCreateConsentCookie,
+    noTranscriptFound
+} from './error.js';
+import { parseHtml } from './htmlParser.js';
 import axios from 'axios';
 import tough from 'tough-cookie';
 import fs from 'fs';
@@ -21,7 +35,7 @@ async function fetchVideoHtml(httpClient, videoId) {
 }
 
 async function fetchHtml(httpClient, videoId) {
-    const response = await httpClient.get(settings.WATCH_URL.replace('{video_id}', videoId), {
+    const response = await httpClient.get(settings.watchURL.replace('{video_id}', videoId), {
         headers: { 'Accept-Language': 'en-US' }
     });
     return unescape(response.data);
@@ -206,7 +220,7 @@ function createTranscriptParser(preserveFormatting = false) {
     }
 }
 
-module.exports = {
+export {
     fetchVideoHtml,
     fetchHtml,
     createConsentCookie,

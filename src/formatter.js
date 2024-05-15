@@ -71,7 +71,7 @@ function FormatterFactory(format = 'pretty') {
     return formatter;
 }
 
-module.exports = {
+export {
     formatPretty,
     formatJSON,
     formatPlainText,
