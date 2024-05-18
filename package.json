@@ -1,7 +1,7 @@
 {
   "name": "yt-script",
-  "version": "1.0.1",
-  "description": "get subscripts for any youtube video",
+  "version": "1.0.0",
+  "description": "get subtitles for any YouTube video",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -9,7 +9,6 @@
   },
   "keywords": [
     "youtube",
-    "subscript",
     "subtitles",
     "yt"
   ],
@@ -17,7 +16,10 @@
     "yt-script": "./index.js"
   },
   "type": "module",
-  "repository": "https://github.com/zshmeta/ytScript",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zshmeta/yt-script"
+  },
   "author": "zshmeta",
   "license": "MIT",
   "dependencies": {

@@ -20,6 +20,12 @@ import {
 } from './formatter.js';
 import { watchURL } from './settings.js';
 
+function extractYouTubeVideoId(url) {
+    const regex = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+}
+
 const ytScript = async () => {
 
     function parseArguments() {
@@ -28,39 +34,33 @@ const ytScript = async () => {
         program
             .name('yt-script')
             .description('Fetch YouTube video transcripts.')
-            .argument('<video_ids...>', 'List of YouTube video IDs.')
+            .argument('<video_ids...>', 'List of YouTube video IDs or URLs.')
             .option('--list-transcripts', 'List available languages for the given videos.')
             .option('--languages <languages...>', 'List of languages in descending priority', ['en'])
-            .option('--exclude-generated', 'Exclude automatically generated transcripts.')
-            .option('--exclude-manually-created', 'Exclude manually created transcripts.')
             .option('--format <format>', 'Output format', 'pretty')
-            .option('--translate <language>', 'Language to translate the transcript to.')
-            .option('--http-proxy <url>', 'HTTP proxy URL.')
-            .option('--https-proxy <url>', 'HTTPS proxy URL.')
-            .option('--cookies <file>', 'Path to cookies file.');
+            .option('--translate <language>', 'Language to translate the transcript to.');
 
         program.parse(process.argv);
 
         const options = program.opts();
-        options.video_ids = program.args; // Extract video_ids from arguments
+        options.video_ids = program.args.map(arg => extractYouTubeVideoId(arg) || arg); // Extract video IDs from URLs
         return options;
     }
 
     async function fetchAndFormatTranscripts(options) {
-        const { video_ids, listTranscripts, languages, excludeGenerated, excludeManuallyCreated, format, translate, httpProxy, httpsProxy, cookies } = options;
+        const { video_ids, listTranscripts, languages, excludeGenerated, excludeManuallyCreated, format, translate } = options;
 
         if (excludeGenerated && excludeManuallyCreated) {
             return '';
         }
 
-        const proxies = (httpProxy || httpsProxy) ? { http: httpProxy, https: httpsProxy } : null;
         const cookiesData = cookies ? fs.readFileSync(cookies, 'utf8') : null;
         const transcripts = [];
         const exceptions = [];
 
         for (const videoId of video_ids) {
             try {
-                const transcript = await fetchTranscript(videoId, proxies, cookiesData, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
+                const transcript = await fetchTranscript(videoId, cookiesData, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
                 transcripts.push(transcript);
             } catch (exception) {
                 exceptions.push(exception);
@@ -71,8 +71,8 @@ const ytScript = async () => {
         return [...exceptions.map(e => e.toString()), transcripts.length ? formatter(transcripts) : ''].join('\n\n');
     }
 
-    async function fetchTranscript(videoId, proxies, cookiesData, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate) {
-        const httpClient = axios.create({ proxy: proxies });
+    async function fetchTranscript(videoId, cookiesData, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate) {
+        const httpClient = axios.create();
         httpClient.defaults.jar = new tough.CookieJar();
 
         if (cookiesData) {
