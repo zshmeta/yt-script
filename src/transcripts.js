@@ -1,3 +1,4 @@
+\#!/usr/bin/env node
 import { DOMParser } from 'xmldom';
 import { watchURL} from './settings.js';
 import {

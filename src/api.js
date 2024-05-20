@@ -1,3 +1,4 @@
+\#!/usr/bin/env node
 import axios from 'axios';
 import tough from 'tough-cookie';
 import fs from 'fs';

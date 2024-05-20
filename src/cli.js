@@ -1,3 +1,4 @@
+\#!/usr/bin/env node
 import { Command } from 'commander';
 import axios from 'axios';
 import tough from 'tough-cookie';

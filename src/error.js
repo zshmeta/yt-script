@@ -1,3 +1,4 @@
+\#!/usr/bin/env node
 import { watchURL } from './settings.js';
 
 
