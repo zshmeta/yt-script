@@ -3,26 +3,30 @@ import { Command } from 'commander';
 import axios from 'axios';
 import tough from 'tough-cookie';
 import fs from 'fs';
-import { 
-    fetchVideoHtml, 
-    extractCaptionsJson, 
-    buildTranscriptList, 
-    findTranscript, 
-    findGeneratedTranscript, 
-    findManuallyCreatedTranscript 
+import {
+    fetchVideoHtml,
+    extractCaptionsJson,
+    buildTranscriptList,
+    findTranscript,
+    findGeneratedTranscript,
+    findManuallyCreatedTranscript
 } from './transcripts.js';
 import {
-    formatPretty, 
-    formatJSON, 
-    formatPlainText, 
-    formatSRT, 
-    formatWebVTT, 
-    FormatterFactory 
+    formatPretty,
+    formatJSON,
+    formatPlainText,
+    FormatterFactory
 } from './formatter.js';
 import { watchURL } from './settings.js';
 
+/**
+ * Main function to run the YouTube transcript fetching script
+ */
 const ytScript = async () => {
-
+    /**
+     * Parse command line arguments
+     * @returns {Object} Parsed options and arguments
+     */
     function parseArguments() {
         const program = new Command();
 
@@ -42,16 +46,37 @@ const ytScript = async () => {
 
         program.parse(process.argv);
 
+        // Display help if no arguments are provided
+        if (process.argv.length <= 2) {
+            program.help();
+        }
+
         const options = program.opts();
         options.video_ids = program.args; // Extract video_ids from arguments
         return options;
     }
 
+    /**
+     * Fetch and format transcripts based on options
+     * @param {Object} options - Parsed options from command line arguments
+     * @returns {string} Formatted transcripts or error messages
+     */
     async function fetchAndFormatTranscripts(options) {
-        const { video_ids, listTranscripts, languages, excludeGenerated, excludeManuallyCreated, format, translate, httpProxy, httpsProxy, cookies } = options;
+        const {
+            video_ids,
+            listTranscripts,
+            languages,
+            excludeGenerated,
+            excludeManuallyCreated,
+            format,
+            translate,
+            httpProxy,
+            httpsProxy,
+            cookies
+        } = options;
 
         if (excludeGenerated && excludeManuallyCreated) {
-            return '';
+            return 'Error: Both --exclude-generated and --exclude-manually-created options cannot be used together.';
         }
 
         const proxies = (httpProxy || httpsProxy) ? { http: httpProxy, https: httpsProxy } : null;
@@ -72,6 +97,18 @@ const ytScript = async () => {
         return [...exceptions.map(e => e.toString()), transcripts.length ? formatter(transcripts) : ''].join('\n\n');
     }
 
+    /**
+     * Fetch transcript for a specific video ID
+     * @param {string} videoId - YouTube video ID
+     * @param {Object|null} proxies - Proxy configuration
+     * @param {string|null} cookiesData - Cookies data
+     * @param {Array} languages - Preferred languages
+     * @param {boolean} listTranscripts - Flag to list available transcripts
+     * @param {boolean} excludeGenerated - Flag to exclude generated transcripts
+     * @param {boolean} excludeManuallyCreated - Flag to exclude manually created transcripts
+     * @param {string} translate - Language to translate the transcript to
+     * @returns {string} Formatted transcript or transcript list
+     */
     async function fetchTranscript(videoId, proxies, cookiesData, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate) {
         const httpClient = axios.create({ proxy: proxies });
         httpClient.defaults.jar = new tough.CookieJar();
@@ -108,20 +145,44 @@ const ytScript = async () => {
         return await transcript.fetch();
     }
 
+    /**
+     * Convert transcript list to a string
+     * @param {Object} transcriptList - Transcript list object
+     * @returns {string} String representation of available transcripts
+     */
     function transcriptListToString(transcriptList) {
         return `For this video (${transcriptList.videoId}) transcripts are available in the following languages:\n\n(MANUALLY CREATED)\n${getLanguageDescription(Object.values(transcriptList.manuallyCreatedTranscripts))}\n\n(GENERATED)\n${getLanguageDescription(Object.values(transcriptList.generatedTranscripts))}\n\n(TRANSLATION LANGUAGES)\n${getLanguageDescription(transcriptList.translationLanguages)}`;
     }
 
+    /**
+     * Get language description from transcript array
+     * @param {Array} transcripts - Array of transcripts
+     * @returns {string} String representation of languages
+     */
     function getLanguageDescription(transcripts) {
         return transcripts.length > 0 ? transcripts.map(t => ` - ${t}`).join('\n') : 'None';
     }
 
+    /**
+     * Run the main script
+     */
     async function run() {
-        const options = parseArguments();
-        const output = await fetchAndFormatTranscripts(options);
-        console.log(output);
+        try {
+            const options = parseArguments();
+            const output = await fetchAndFormatTranscripts(options);
+            console.log(output);
+        } catch (err) {
+            console.error('An error occurred:', err);
+            parseArguments().help();
+        }
     }
 
+    /**
+     * Fetch HTML content of a YouTube video page
+     * @param {Object} httpClient - Axios HTTP client instance
+     * @param {string} videoId - YouTube video ID
+     * @returns {string} HTML content of the video page
+     */
     async function fetchVideoHtml(httpClient, videoId) {
         const response = await httpClient.get(watchURL.replace('{video_id}', videoId), {
             headers: { 'Accept-Language': 'en-US' }
@@ -129,9 +190,7 @@ const ytScript = async () => {
         return unescape(response.data);
     }
 
-    run().catch(err => {
-        console.error('An error occurred:', err);
-    });
+    run();
 };
 
 export default ytScript;
