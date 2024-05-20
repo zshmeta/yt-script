@@ -20,7 +20,7 @@
 
 - Fetches transcripts for YouTube videos.
 - Supports multiple languages.
-- Outputs transcripts in various formats (pretty, JSON, plain text, SRT, WebVTT).
+- Outputs transcripts in various formats (pretty, JSON, plain text).
 - Option to translate transcripts to different languages.
 - Lists available languages for transcripts.
 
@@ -56,7 +56,7 @@ yt-script <video_id_or_url>
 
 - `--list-transcripts`: List available languages for the given videos.
 - `--languages <languages...>`: List of languages in descending priority (default: `['en']`).
-- `--format <format>`: Output format (`pretty`, `json`, `text`, `srt`, `webvtt`; default: `pretty`).
+- `--format <format>`: Output format (`pretty`, `json`, `text`, default: `pretty`).
 - `--translate <language>`: Language to translate the transcript to.
 
 ### Examples
