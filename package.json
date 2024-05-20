@@ -1,6 +1,6 @@
 {
   "name": "yt-script",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "get subtitles for any YouTube video",
   "main": "index.js",
   "scripts": {
