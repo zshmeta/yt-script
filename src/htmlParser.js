@@ -1,4 +1,4 @@
-\#!/usr/bin/env node
+#!/usr/bin/env node
 import { parse } from 'node-html-parser';
 
 
