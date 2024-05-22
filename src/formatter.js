@@ -1,5 +1,19 @@
 #!/usr/bin/env node
+
 import util from 'util';
+
+/**
+ * Formats the given seconds into a timestamp
+ * @param {number} seconds - The number of seconds
+ * @returns {string} - The formatted timestamp
+ */
+function formatTimestamp(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    seconds %= 3600;
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
 
 /**
  * Formats the transcript in a pretty format using util.inspect
@@ -27,7 +41,7 @@ function formatJSON(transcript, options = {}) {
  * @returns {string} - The plain text formatted transcript
  */
 function formatPlainText(transcript) {
-    return transcript.map(line => line.text).join('\n');
+    return transcript.map(line => `${formatTimestamp(line.start)}: ${line.text}`).join('\n');
 }
 
 /**
@@ -38,23 +52,6 @@ function formatPlainText(transcript) {
 function formatPlainTextMultiple(transcripts) {
     return transcripts.map(transcript => formatPlainText(transcript)).join('\n\n\n');
 }
-
-/**
- * Formats the given seconds into a timestamp using the provided format function
- * @param {number} seconds - The number of seconds
- * @param {Function} format - The format function
- * @returns {string} - The formatted timestamp
- */
-function formatTimestamp(seconds, format) {
-    const hours = Math.floor(seconds / 3600);
-    seconds %= 3600;
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    const milliseconds = Math.round((seconds % 1) * 1000);
-
-    return format(hours, minutes, secs, milliseconds);
-}
-
 
 /**
  * Helper function to format a transcript
@@ -69,13 +66,12 @@ function formatTranscriptHelper(transcript, getTimestampFunc, formatHeaderFunc, 
     const lines = transcript.map((line, index) => {
         const end = line.start + (options.duration ? line.duration : 0);
         const nextStart = transcript[index + 1]?.start || end;
-        const timecode = `${formatTimestamp(line.start, getTimestampFunc)} --> ${formatTimestamp(nextStart, getTimestampFunc)}`;
+        const timecode = `${formatTimestamp(line.start)} --> ${formatTimestamp(nextStart)}`;
         return formatLineFunc(index, timecode, line, options);
     });
 
     return formatHeaderFunc(lines);
 }
-
 
 /**
  * Factory function to get the appropriate formatter
@@ -90,8 +86,6 @@ function FormatterFactory(format = 'pretty', options = {}) {
         pretty: (transcript) => formatPretty(transcript, options),
         text: (transcript) => formatPlainText(transcript, options),
         textMultiple: (transcripts) => formatPlainTextMultiple(transcripts, options),
-        // webvtt: (transcript) => formatWebVTT(transcript, options),
-        // srt: (transcript) => formatSRT(transcript, options)
     };
 
     const formatter = formats[format];
@@ -102,6 +96,7 @@ function FormatterFactory(format = 'pretty', options = {}) {
 }
 
 export {
+    formatTimestamp,
     formatPretty,
     formatJSON,
     formatPlainText,

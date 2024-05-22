@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+
 import { DOMParser } from 'xmldom';
-import axios from 'axios';
-import tough from 'tough-cookie';
+import fetch from 'node-fetch';
+import fetchCookie from 'fetch-cookie';
 import fs from 'fs';
 import {
     watchURL
@@ -23,21 +24,23 @@ import {
 } from './error.js';
 import { parseHtml } from './htmlParser.js';
 
+// Create a fetch client with cookie jar support
+const fetchWithCookies = fetchCookie(fetch);
+
 /**
  * Fetch the HTML content of a YouTube video page and handle consent cookie creation
- * @param {Object} httpClient - Axios HTTP client instance
  * @param {string} videoId - YouTube video ID
  * @returns {string} HTML content of the video page
  * @throws {Error} If consent cookie creation fails
  */
-async function fetchVideoHtml(httpClient, videoId) {
+async function fetchVideoHtml(videoId) {
     // Fetch the HTML content of the video page
-    let html = await fetchHtml(httpClient, videoId);
+    let html = await fetchHtml(videoId);
     // Check if consent cookie is required
     if (html.includes('action="https://consent.youtube.com/s"')) {
-        await createConsentCookie(httpClient, html, videoId);
+        await createConsentCookie(html, videoId);
         // Fetch the HTML content again after setting the consent cookie
-        html = await fetchHtml(httpClient, videoId);
+        html = await fetchHtml(videoId);
         if (html.includes('action="https://consent.youtube.com/s"')) {
             throw new failedToCreateConsentCookie(videoId);
         }
@@ -47,33 +50,37 @@ async function fetchVideoHtml(httpClient, videoId) {
 
 /**
  * Fetch the raw HTML content of a YouTube video page
- * @param {Object} httpClient - Axios HTTP client instance
  * @param {string} videoId - YouTube video ID
  * @returns {string} HTML content of the video page
  */
-async function fetchHtml(httpClient, videoId) {
-    // Make a request to the YouTube video page and return the HTML content
-    const response = await httpClient.get(watchURL.replace('{video_id}', videoId), {
+async function fetchHtml(videoId) {
+    const response = await fetchWithCookies(watchURL.replace('{video_id}', videoId), {
         headers: { 'Accept-Language': 'en-US' }
     });
-    return unescape(response.data);
+    const text = await response.text();
+    return unescape(text);
 }
 
 /**
  * Create a consent cookie to bypass YouTube's consent page
- * @param {Object} httpClient - Axios HTTP client instance
  * @param {string} html - HTML content of the consent page
  * @param {string} videoId - YouTube video ID
  * @throws {Error} If the consent cookie creation fails
  */
-async function createConsentCookie(httpClient, html, videoId) {
+async function createConsentCookie(html, videoId) {
     // Extract the consent value from the HTML content
     const match = html.match(/name="v" value="(.*?)"/);
     if (!match) {
         throw new failedToCreateConsentCookie(videoId);
     }
     // Set the consent cookie
-    httpClient.defaults.jar.setCookieSync(`CONSENT=YES+${match[1]}`, 'https://www.youtube.com');
+    await fetchWithCookies('https://www.youtube.com', {
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `CONSENT=YES+${match[1]}`,
+        method: 'POST'
+    });
 }
 
 /**
@@ -119,12 +126,11 @@ function extractCaptionsJson(html, videoId) {
 
 /**
  * Build a list of transcripts from the captions JSON
- * @param {Object} httpClient - Axios HTTP client instance
  * @param {string} videoId - YouTube video ID
  * @param {Object} captionsJson - Captions JSON object
  * @returns {Object} Transcript list object
  */
-function buildTranscriptList(httpClient, videoId, captionsJson) {
+function buildTranscriptList(videoId, captionsJson) {
     // Create a list of available translation languages
     const translationLanguages = captionsJson.translationLanguages.map(lang => ({
         language: lang.languageName.simpleText,
@@ -139,7 +145,6 @@ function buildTranscriptList(httpClient, videoId, captionsJson) {
     captionsJson.captionTracks.forEach(caption => {
         const transcriptDict = caption.kind === 'asr' ? generatedTranscripts : manuallyCreatedTranscripts;
         transcriptDict[caption.languageCode] = createTranscript(
-            httpClient,
             videoId,
             caption.baseUrl,
             caption.name.simpleText,
@@ -248,7 +253,6 @@ function getLanguageDescription(transcripts) {
 
 /**
  * Create a transcript object
- * @param {Object} httpClient - Axios HTTP client instance
  * @param {string} videoId - YouTube video ID
  * @param {string} url - Transcript URL
  * @param {string} language - Language of the transcript
@@ -257,7 +261,7 @@ function getLanguageDescription(transcripts) {
  * @param {Array} translationLanguages - List of translatable languages
  * @returns {Object} Transcript object
  */
-function createTranscript(httpClient, videoId, url, language, languageCode, isGenerated, translationLanguages) {
+function createTranscript(videoId, url, language, languageCode, isGenerated, translationLanguages) {
     // Build a dictionary of translation languages
     const translationLanguagesDict = translationLanguages.reduce((acc, lang) => {
         acc[lang.language_code] = lang.language;
@@ -265,7 +269,6 @@ function createTranscript(httpClient, videoId, url, language, languageCode, isGe
     }, {});
 
     return {
-        httpClient,
         videoId,
         url,
         language,
@@ -275,11 +278,12 @@ function createTranscript(httpClient, videoId, url, language, languageCode, isGe
         translationLanguagesDict,
         async fetch(preserveFormatting = false) {
             // Fetch and parse the transcript data
-            const response = await httpClient.get(url, {
+            const response = await fetchWithCookies(url, {
                 headers: { 'Accept-Language': 'en-US' }
             });
+            const text = await response.text();
             const parser = createTranscriptParser(preserveFormatting);
-            return parser.parse(unescape(response.data));
+            return parser.parse(unescape(text));
         },
         toString() {
             // Return a string representation of the transcript
@@ -298,7 +302,6 @@ function createTranscript(httpClient, videoId, url, language, languageCode, isGe
                 throw new translationLanguageNotAvailable(this.videoId);
             }
             return createTranscript(
-                httpClient,
                 videoId,
                 `${url}&tlang=${languageCode}`,
                 this.translationLanguagesDict[languageCode],
