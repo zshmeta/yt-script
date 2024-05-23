@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import axios from 'axios';
-import { CookieJar } from 'tough-cookie';
-import { wrapper } from 'axios-cookiejar-support';
+import fetch from 'node-fetch';
+import fetchCookie from 'fetch-cookie';
 import fs from 'fs';
 
 class YouTubeTranscriptApi {
@@ -14,19 +13,15 @@ class YouTubeTranscriptApi {
      * @returns {Promise<Object>} The list of available transcripts.
      */
     static async listTranscripts(videoId, proxies = null, cookies = null) {
-        const jar = new CookieJar();
-        const client = wrapper(axios.create({ jar }));
+        const cookieJar = new fetchCookie.tough.CookieJar();
+        const client = fetchCookie(fetch, cookieJar);
 
         if (cookies) {
-            await this.loadCookies(jar, cookies);
+            await this.loadCookies(cookieJar, cookies);
         }
 
-        if (proxies) {
-            client.defaults.proxy = proxies;
-        }
-
-        // Assuming TranscriptListFetcher.fetch() returns a promise
-        const transcriptListFetcher = new TranscriptListFetcher(client);
+        // Fetch the transcript list
+        const transcriptListFetcher = new TranscriptListFetcher(client, proxies);
         return transcriptListFetcher.fetch(videoId);
     }
 
@@ -105,8 +100,9 @@ class YouTubeTranscriptApi {
 
 // Placeholder for missing dependencies
 class TranscriptListFetcher {
-    constructor(client) {
+    constructor(client, proxies) {
         this.client = client;
+        this.proxies = proxies;
     }
 
     /**
@@ -114,9 +110,22 @@ class TranscriptListFetcher {
      * @param {string} videoId - The YouTube video ID.
      * @returns {Promise<Object>} The fetched transcript list.
      */
-    fetch(videoId) {
-        // Placeholder method
-        return Promise.resolve({
+    async fetch(videoId) {
+        const url = `https://www.youtube.com/api/timedtext?type=list&v=${videoId}`;
+
+        const fetchOptions = {};
+        if (this.proxies) {
+            fetchOptions.agent = this.proxies;
+        }
+
+        const response = await this.client(url, fetchOptions);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch transcript list for video ID: ${videoId}`);
+        }
+
+        const data = await response.json();
+        // Assuming the data structure here, adjust as necessary
+        return {
             findTranscript: (languages) => ({
                 fetch: ({ preserveFormatting }) => {
                     // Placeholder fetch implementation
@@ -127,7 +136,7 @@ class TranscriptListFetcher {
                     }]);
                 }
             })
-        });
+        };
     }
 }
 

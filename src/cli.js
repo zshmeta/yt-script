@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander'; 
+import { Command } from 'commander';
 import fetch from 'node-fetch';
 import fetchCookie from 'fetch-cookie';
 import fs from 'fs';
@@ -26,8 +26,12 @@ import { watchURL } from './settings.js';
 // Create a fetch client with cookie jar support
 const fetchWithCookies = fetchCookie(fetch);
 
-// Function to format the start and duration fields
-function formatTranscriptTimestamps(transcript) {
+/**
+ * Helper function to format the start time and duration of each transcript line.
+ * @param {Array} transcript - The transcript array
+ * @returns {Array} - The formatted transcript array
+ */
+function transformTranscriptData(transcript, format) {
     return transcript.map(line => ({
         ...line,
         start: formatTimestamp(line.start),
@@ -40,31 +44,30 @@ const ytScript = async () => {
     // Function to parse command line arguments
     function parseArguments() {
         const program = new Command();
-
+    
         // Defining command line arguments and options
         program
             .name('yt-script')
             .description('Fetch YouTube video transcripts.')
-            .argument('<video_ids...>', 'List of YouTube video IDs.')
+            .argument('<video_id>', 'YouTube video ID.')
             .option('--list-transcripts', 'List available languages for the given videos.')
             .option('--languages <languages...>', 'List of languages in descending priority', ['en'])
-            .option('--exclude-generated', 'Exclude automatically generated transcripts.')
-            .option('--exclude-manually-created', 'Exclude manually created transcripts.')
-            .option('--format <format>', 'Output format', 'pretty')
+            .option('--format <format>', 'Output format', 'text')
             .option('--translate <language>', 'Language to translate the transcript to.')
             .option('--http-proxy <url>', 'HTTP proxy URL.')
             .option('--https-proxy <url>', 'HTTPS proxy URL.')
             .option('--cookies <file>', 'Path to cookies file.');
-
+    
         program.parse(process.argv);
-
-        // Display help if no arguments are provided
-        if (process.argv.length <= 2) {
+    
+        const options = program.opts();
+        options.video_id = program.args[0]; // Extract video_id from arguments
+    
+        // Display help if no video_id is provided
+        if (!options.video_id) {
             program.help();
         }
-
-        const options = program.opts();
-        options.video_ids = program.args; // Extract video_ids from arguments
+    
         return options;
     }
 
@@ -72,7 +75,7 @@ const ytScript = async () => {
     async function fetchAndFormatTranscripts(options) {
         // Destructuring options
         const {
-            video_ids,
+            video_id,
             listTranscripts,
             languages,
             excludeGenerated,
@@ -83,11 +86,6 @@ const ytScript = async () => {
             httpsProxy,
             cookies
         } = options;
-
-        // Error handling for mutually exclusive options
-        if (excludeGenerated && excludeManuallyCreated) {
-            return 'Error: Both --exclude-generated and --exclude-manually-created options cannot be used together.';
-        }
 
         // Setting up proxies if provided
         const proxies = (httpProxy || httpsProxy) ? { http: httpProxy, https: httpsProxy } : null;
@@ -102,15 +100,13 @@ const ytScript = async () => {
         const transcripts = [];
         const exceptions = [];
 
-        // Fetching transcripts for each video ID
-        for (const videoId of video_ids) {
-            try {
-                const transcript = await fetchTranscript(videoId, proxies, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
-                const formattedTranscript = formatTranscriptTimestamps(transcript); // Format timestamps
-                transcripts.push(formattedTranscript);
-            } catch (exception) {
-                exceptions.push(exception);
-            }
+        try {
+            const transcript = await fetchTranscript(video_id, proxies, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
+            // Transforming the transcript data
+            const formattedTranscript = transformTranscriptData(transcript);
+            transcripts.push(formattedTranscript);
+        } catch (exception) {
+            exceptions.push(exception);
         }
 
         // Formatting the transcripts
@@ -178,7 +174,7 @@ const ytScript = async () => {
             console.log(output);
         } catch (err) {
             console.error('An error occurred:', err);
-            parseArguments().help();
+            program.help();
         }
     }
 
@@ -193,3 +189,5 @@ const ytScript = async () => {
 };
 
 export default ytScript;
+
+ytScript();

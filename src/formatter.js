@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import util from 'util';
+import color from 'chalk';
+
+
 
 /**
  * Formats the given seconds into a timestamp
@@ -15,6 +18,7 @@ function formatTimestamp(seconds) {
     return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+
 /**
  * Formats the transcript in a pretty format using util.inspect
  * @param {Object} transcript - The transcript object
@@ -22,7 +26,7 @@ function formatTimestamp(seconds) {
  * @returns {string} - The formatted transcript
  */
 function formatPretty(transcript, options = {}) {
-    return util.inspect(transcript, { compact: true, ...options, maxArrayLength: null, depth: null });
+    return util.inspect(transcript, { compact: true, ...options, maxArrayLength: null, depth: null, breakLength: 120, colors: true, sorted: true, getters: true, showHidden: true, maxStringLength: null, maxObjectSize: null, customInspect: true });
 }
 
 /**
@@ -31,9 +35,12 @@ function formatPretty(transcript, options = {}) {
  * @param {Object} [options={}] - Optional formatting options
  * @returns {string} - The JSON formatted transcript
  */
+
+
 function formatJSON(transcript, options = {}) {
-    return JSON.stringify(transcript, null, options.space);
+    return JSON.stringify(transcript, ["start", "text", "duration"], 2);
 }
+
 
 /**
  * Formats the transcript as plain text
@@ -41,7 +48,10 @@ function formatJSON(transcript, options = {}) {
  * @returns {string} - The plain text formatted transcript
  */
 function formatPlainText(transcript) {
-    return transcript.map(line => `${formatTimestamp(line.start)}: ${line.text}`).join('\n');
+    
+
+    return transcript.map(line => `${color.blue(line.start)}: ${color.yellow(line.text)}. ${color.green(line.duration)}`).join('\n');
+
 }
 
 /**
@@ -80,17 +90,17 @@ function formatTranscriptHelper(transcript, getTimestampFunc, formatHeaderFunc, 
  * @returns {Function} - The formatter function
  * @throws {Error} - If the format is not supported
  */
-function FormatterFactory(format = 'pretty', options = {}) {
+function FormatterFactory(format = 'text', options = {}) {
     const formats = {
         json: (transcript) => formatJSON(transcript, options),
         pretty: (transcript) => formatPretty(transcript, options),
-        text: (transcript) => formatPlainText(transcript, options),
-        textMultiple: (transcripts) => formatPlainTextMultiple(transcripts, options),
+        text: (transcripts) => formatPlainTextMultiple(transcripts, options),
     };
 
     const formatter = formats[format];
     if (!formatter) {
         throw new Error(`The format '${format}' is not supported. Supported formats: ${Object.keys(formats).join(', ')}`);
+        
     }
     return formatter;
 }
@@ -101,5 +111,6 @@ export {
     formatJSON,
     formatPlainText,
     formatPlainTextMultiple,
+    formatTranscriptHelper,
     FormatterFactory
 };
