@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { watchURL } from './settings.js';
+
+const watchURL = 'https://www.youtube.com/watch?v={video_id}';
 
 
 function couldNotRetrieveTranscript(videoId) {

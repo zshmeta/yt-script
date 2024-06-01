@@ -5,9 +5,6 @@ import fetch from 'node-fetch';
 import fetchCookie from 'fetch-cookie';
 import fs from 'fs';
 import {
-    watchURL
-} from './settings.js';
-import {
     couldNotRetrieveTranscript,
     youTubeRequestFailed,
     videoUnavailable,
@@ -27,12 +24,8 @@ import { parseHtml } from './htmlParser.js';
 // Create a fetch client with cookie jar support
 const fetchWithCookies = fetchCookie(fetch);
 
-/**
- * Fetch the HTML content of a YouTube video page and handle consent cookie creation
- * @param {string} videoId - YouTube video ID
- * @returns {string} HTML content of the video page
- * @throws {Error} If consent cookie creation fails
- */
+// Fetch the HTML content of a YouTube video page and handle consent cookie creation
+
 async function fetchVideoHtml(videoId) {
     // Fetch the HTML content of the video page
     let html = await fetchHtml(videoId);
@@ -48,25 +41,26 @@ async function fetchVideoHtml(videoId) {
     return html;
 }
 
-/**
- * Fetch the raw HTML content of a YouTube video page
- * @param {string} videoId - YouTube video ID
- * @returns {string} HTML content of the video page
- */
+// Fetch the raw HTML content of a YouTube video page
+const watchURL = 'https://www.youtube.com/watch?v={video_id}';
 async function fetchHtml(videoId) {
-    const response = await fetchWithCookies(watchURL.replace('{video_id}', videoId), {
-        headers: { 'Accept-Language': 'en-US' }
-    });
-    const text = await response.text();
+    // First attempt to fetch the video page without specifying a language
+    let response = await fetchWithCookies(watchURL.replace('{video_id}', videoId));
+    let text = await response.text();
+
+    // Check if the response indicates a failure due to language settings
+    if (text.includes('action="https://consent.youtube.com/s"') || text.includes('yt-uix-button')) {
+        // Retry with a specific language header as a fallback
+        response = await fetchWithCookies(watchURL.replace('{video_id}', videoId), {
+            headers: { 'Accept-Language': 'en-US' }
+        });
+        text = await response.text();
+    }
+
     return unescape(text);
 }
 
-/**
- * Create a consent cookie to bypass YouTube's consent page
- * @param {string} html - HTML content of the consent page
- * @param {string} videoId - YouTube video ID
- * @throws {Error} If the consent cookie creation fails
- */
+// Create a consent cookie to bypass YouTube's consent page
 async function createConsentCookie(html, videoId) {
     // Extract the consent value from the HTML content
     const match = html.match(/name="v" value="(.*?)"/);
@@ -83,13 +77,7 @@ async function createConsentCookie(html, videoId) {
     });
 }
 
-/**
- * Extract captions JSON from the YouTube video HTML
- * @param {string} html - HTML content of the video page
- * @param {string} videoId - YouTube video ID
- * @returns {Object} Captions JSON
- * @throws {Error} If no captions are found or an error occurs
- */
+// Extract captions JSON from the YouTube video HTML
 function extractCaptionsJson(html, videoId) {
     // Split the HTML content to find the captions JSON
     const splittedHtml = html.split('"captions":');
@@ -124,12 +112,8 @@ function extractCaptionsJson(html, videoId) {
     return captionsJson;
 }
 
-/**
- * Build a list of transcripts from the captions JSON
- * @param {string} videoId - YouTube video ID
- * @param {Object} captionsJson - Captions JSON object
- * @returns {Object} Transcript list object
- */
+// Build a list of transcripts from the captions JSON
+
 function buildTranscriptList(videoId, captionsJson) {
     // Create a list of available translation languages
     const translationLanguages = captionsJson.translationLanguages.map(lang => ({
@@ -162,12 +146,7 @@ function buildTranscriptList(videoId, captionsJson) {
     };
 }
 
-/**
- * Iterate through transcript lists
- * @param {Object} manuallyCreatedTranscripts - Manually created transcripts
- * @param {Object} generatedTranscripts - Generated transcripts
- * @returns {Generator} Iterator for transcripts
- */
+// Iterate through transcript lists
 function* transcriptListIterator(manuallyCreatedTranscripts, generatedTranscripts) {
     // Yield manually created transcripts
     yield* Object.values(manuallyCreatedTranscripts);
@@ -175,50 +154,25 @@ function* transcriptListIterator(manuallyCreatedTranscripts, generatedTranscript
     yield* Object.values(generatedTranscripts);
 }
 
-/**
- * Find a transcript by language code
- * @param {Object} transcriptList - Transcript list object
- * @param {Array} languageCodes - List of preferred language codes
- * @returns {Object} Found transcript
- * @throws {Error} If no transcript is found
- */
+// Find a transcript by language code
 function findTranscript(transcriptList, languageCodes) {
     // Try to find a manually created or generated transcript in the preferred languages
     return findTranscriptHelper(transcriptList, languageCodes, [transcriptList.manuallyCreatedTranscripts, transcriptList.generatedTranscripts]);
 }
 
-/**
- * Find a generated transcript by language code
- * @param {Object} transcriptList - Transcript list object
- * @param {Array} languageCodes - List of preferred language codes
- * @returns {Object} Found generated transcript
- * @throws {Error} If no generated transcript is found
- */
+// Find a generated transcript by language code
 function findGeneratedTranscript(transcriptList, languageCodes) {
     // Try to find a generated transcript in the preferred languages
     return findTranscriptHelper(transcriptList, languageCodes, [transcriptList.generatedTranscripts]);
 }
 
-/**
- * Find a manually created transcript by language code
- * @param {Object} transcriptList - Transcript list object
- * @param {Array} languageCodes - List of preferred language codes
- * @returns {Object} Found manually created transcript
- * @throws {Error} If no manually created transcript is found
- */
+// Find a manually created transcript by language code
 function findManuallyCreatedTranscript(transcriptList, languageCodes) {
     // Try to find a manually created transcript in the preferred languages
     return findTranscriptHelper(transcriptList, languageCodes, [transcriptList.manuallyCreatedTranscripts]);
 }
 
-/**
- * Helper function to find a transcript by language code
- * @param {Object} transcriptList - Transcript list object
- * @param {Array} languageCodes - List of preferred language codes
- * @param {Array} transcriptDicts - Array of transcript dictionaries
- * @returns {Object} Found transcript
- * @throws {Error} If no transcript is found
- */
+// Helper function to find a transcript by language code
 function findTranscriptHelper(transcriptList, languageCodes, transcriptDicts) {
     // Iterate over preferred language codes and transcript dictionaries to find a match
     for (const code of languageCodes) {
@@ -231,38 +185,21 @@ function findTranscriptHelper(transcriptList, languageCodes, transcriptDicts) {
     throw new noTranscriptFound(transcriptList.videoId, languageCodes);
 }
 
-/**
- * Convert transcript list to a string
- * @param {Object} transcriptList - Transcript list object
- * @returns {string} String representation of available transcripts
- */
+// Convert transcript list to a string
+
 function transcriptListToString(transcriptList) {
     // Build a string representation of the available transcripts
     return `For this video (${transcriptList.videoId}) transcripts are available in the following languages:\n\n(MANUALLY CREATED)\n${getLanguageDescription(Object.values(transcriptList.manuallyCreatedTranscripts))}\n\n(GENERATED)\n${getLanguageDescription(Object.values(transcriptList.generatedTranscripts))}\n\n(TRANSLATION LANGUAGES)\n${getLanguageDescription(transcriptList.translationLanguages)}`;
 }
 
-/**
- * Get a string description of available languages from a list of transcripts
- * @param {Array} transcripts - List of transcripts
- * @returns {string} String representation of languages
- */
+// Get a string description of available languages from a list of transcripts
 function getLanguageDescription(transcripts) {
     // Return a formatted string of available languages or 'None' if empty
-    return transcripts.length > 0 ? transcripts.map(t => ` - ${t}`).join('\n') : 'None';
+    return transcripts.length > 0 ? transcripts.map(t => ` - ${t.language} (${t.language_code})`).join('\n') : 'None';
 }
 
-/**
- * Create a transcript object
- * @param {string} videoId - YouTube video ID
- * @param {string} url - Transcript URL
- * @param {string} language - Language of the transcript
- * @param {string} languageCode - Language code of the transcript
- * @param {boolean} isGenerated - Whether the transcript is generated
- * @param {Array} translationLanguages - List of translatable languages
- * @returns {Object} Transcript object
- */
+/* Create a transcript object */
 function createTranscript(videoId, url, language, languageCode, isGenerated, translationLanguages) {
-    // Build a dictionary of translation languages
     const translationLanguagesDict = translationLanguages.reduce((acc, lang) => {
         acc[lang.language_code] = lang.language;
         return acc;
@@ -277,24 +214,28 @@ function createTranscript(videoId, url, language, languageCode, isGenerated, tra
         translationLanguages,
         translationLanguagesDict,
         async fetch(preserveFormatting = false) {
-            // Fetch and parse the transcript data
-            const response = await fetchWithCookies(url, {
-                headers: { 'Accept-Language': 'en-US' }
-            });
-            const text = await response.text();
+            // Try fetching without specifying language first
+            let response = await fetchWithCookies(url);
+            let text = await response.text();
+
+            // If the response is not successful, retry with 'en-US' language header
+            if (!response.ok) {
+                response = await fetchWithCookies(url, {
+                    headers: { 'Accept-Language': 'en-US' }
+                });
+                text = await response.text();
+            }
+
             const parser = createTranscriptParser(preserveFormatting);
             return parser.parse(unescape(text));
         },
         toString() {
-            // Return a string representation of the transcript
             return `${languageCode} ("${language}")${this.isTranslatable ? '[TRANSLATABLE]' : ''}`;
         },
         get isTranslatable() {
-            // Check if the transcript is translatable
             return this.translationLanguages.length > 0;
         },
         async translate(languageCode) {
-            // Translate the transcript to another language if possible
             if (!this.isTranslatable) {
                 throw new notTranslatable(this.videoId);
             }
@@ -313,17 +254,12 @@ function createTranscript(videoId, url, language, languageCode, isGenerated, tra
     };
 }
 
-/**
- * Create a transcript parser
- * @param {boolean} [preserveFormatting=false] - Whether to preserve HTML formatting
- * @returns {Object} Transcript parser object
- */
+// Create a transcript parser
+
 function createTranscriptParser(preserveFormatting = false) {
-    // Define a regex to remove or preserve HTML tags
     const htmlRegex = getHtmlRegex(preserveFormatting);
     return {
         parse(plainData) {
-            // Parse the XML data into transcript objects
             const doc = new DOMParser().parseFromString(plainData, 'text/xml');
             return Array.from(doc.documentElement.getElementsByTagName('text')).map(el => ({
                 text: el.textContent,
@@ -334,7 +270,6 @@ function createTranscriptParser(preserveFormatting = false) {
     };
 
     function getHtmlRegex(preserveFormatting) {
-        // Return the appropriate regex for removing HTML tags
         if (preserveFormatting) {
             const formattingTags = ['strong', 'em', 'b', 'i', 'mark', 'small', 'del', 'ins', 'sub', 'sup'].join('|');
             return new RegExp(`<\/?(?!\/?(${formattingTags})\b).*?\b>`, 'gi');

@@ -21,15 +21,12 @@ import {
     FormatterFactory,
     formatTimestamp // Import the formatTimestamp function
 } from './formatter.js';
-import { watchURL } from './settings.js';
 
 // Create a fetch client with cookie jar support
 const fetchWithCookies = fetchCookie(fetch);
 
 /**
  * Helper function to format the start time and duration of each transcript line.
- * @param {Array} transcript - The transcript array
- * @returns {Array} - The formatted transcript array
  */
 function transformTranscriptData(transcript, format) {
     return transcript.map(line => ({
@@ -54,54 +51,59 @@ const ytScript = async () => {
             .option('--languages <languages...>', 'List of languages in descending priority', ['en'])
             .option('--format <format>', 'Output format', 'text')
             .option('--translate <language>', 'Language to translate the transcript to.')
-            .option('--http-proxy <url>', 'HTTP proxy URL.')
-            .option('--https-proxy <url>', 'HTTPS proxy URL.')
-            .option('--cookies <file>', 'Path to cookies file.');
+            .option('--exclude-generated', 'Exclude automatically generated transcripts.')
+            .option('--exclude-manually-created', 'Exclude manually created transcripts.')
+            
     
         program.parse(process.argv);
     
         const options = program.opts();
-        options.video_id = program.args[0]; // Extract video_id from arguments
-    
+
+        options.video_id = program.args[0]
+
+        function getVideoId(target) {
+            // if target is not a url return target
+            if (!target.includes('http')) {
+                return target;
+            }
+            // regex to get video id from url
+            const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+            const matches = target.match(regex);
+            return matches ? matches[1] : null;
+            return target;
+        }
+        options.video_id = getVideoId(options.video_id);
+        console.log(options.video_id);
+
         // Display help if no video_id is provided
         if (!options.video_id) {
             program.help();
         }
+
     
         return options;
     }
+
 
     // Function to fetch and format transcripts based on options
     async function fetchAndFormatTranscripts(options) {
         // Destructuring options
         const {
-            video_id,
+            video_id,https:
             listTranscripts,
             languages,
             excludeGenerated,
             excludeManuallyCreated,
             format,
             translate,
-            httpProxy,
-            httpsProxy,
-            cookies
         } = options;
 
-        // Setting up proxies if provided
-        const proxies = (httpProxy || httpsProxy) ? { http: httpProxy, https: httpsProxy } : null;
-        // Reading cookies file if provided
-        if (cookies) {
-            const cookiesData = fs.readFileSync(cookies, 'utf8').split('\n');
-            cookiesData.forEach(cookie => {
-                fetchWithCookies.defaults.headers.cookie = (fetchWithCookies.defaults.headers.cookie || '') + `; ${cookie}`;
-            });
-        }
-
+        // Fetching the transcript
         const transcripts = [];
         const exceptions = [];
 
         try {
-            const transcript = await fetchTranscript(video_id, proxies, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
+            const transcript = await fetchTranscript(video_id, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate);
             // Transforming the transcript data
             const formattedTranscript = transformTranscriptData(transcript);
             transcripts.push(formattedTranscript);
@@ -115,17 +117,13 @@ const ytScript = async () => {
     }
 
     // Function to fetch transcript for a specific video ID
-    async function fetchTranscript(videoId, proxies, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate) {
+    async function fetchTranscript(videoId, languages, listTranscripts, excludeGenerated, excludeManuallyCreated, translate) {
         // Setting up fetch options
         const fetchOptions = {
             headers: {
                 'Accept-Language': 'en-US'
             }
         };
-
-        if (proxies) {
-            fetchOptions.agent = proxies;
-        }
 
         // Fetching video HTML and extracting captions JSON
         const html = await fetchVideoHtml(videoId, fetchOptions);
@@ -177,6 +175,7 @@ const ytScript = async () => {
             program.help();
         }
     }
+    const watchURL = 'https://www.youtube.com/watch?v={video_id}';
 
     // Function to fetch HTML content of a YouTube video page
     async function fetchVideoHtml(videoId, fetchOptions) {
